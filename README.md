@@ -2,9 +2,7 @@ I needed a tool to compare Mifare Classic 1K dumps made with [MCT](https://githu
 
 ### Features:
 - Compare up to 4 different dumps at the same time
-
-### TO-DO:
-- Add a color parser to diff faster
+- Color highlights for changes
 
 ### Screenshot:
 ![tool screenshot](mctread.png)
