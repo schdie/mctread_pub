@@ -2,15 +2,14 @@ from tabulate import tabulate
 import itertools
 from itertools import islice
 import argparse
+import difflib
 
 # arguments
 parser = argparse.ArgumentParser(description='Available inputs')
-
-# -i is argument name, dest is where it will be saved inside the parsed arguments Namespace
-parser.add_argument('-1', dest='file_path1', help = 'Path to the first input file')
-parser.add_argument('-2', dest='file_path2', help = 'Path to the second input file')
-parser.add_argument('-3', dest='file_path3', help = 'Path to the third input file')
-parser.add_argument('-4', dest='file_path4', help = 'Path to the fourth input file')
+parser.add_argument('-1', dest='file_path1', help='Path to the first input file')
+parser.add_argument('-2', dest='file_path2', help='Path to the second input file')
+parser.add_argument('-3', dest='file_path3', help='Path to the third input file')
+parser.add_argument('-4', dest='file_path4', help='Path to the fourth input file')
 
 args = parser.parse_args()
 
@@ -25,82 +24,88 @@ if not args.file_path1:
     quit()
 
 # datasets
-dataset1 = []
-dataset2 = []
-dataset3 = []
-dataset4 = []
+datasets = [[], [], [], []]
+file_paths = [args.file_path1, args.file_path2, args.file_path3, args.file_path4]
 
-# get the 1st data set
-if args.file_path1:
-    try:
-        with open(args.file_path1, "r") as filea:
-            for line in itertools.islice(filea, 80):
-                if "+" not in line:
-                    dataset1.append(line)
-    except IOError:
-        print("Path or filename (1) incorrect, quitting...")
-        quit()
-
-# get the 2nd data set
-if args.file_path2:
-    try:
-        with open(args.file_path2, "r") as fileb:
-            for line in itertools.islice(fileb, 80):
-                if "+" not in line:
-                    dataset2.append(line)
-    except IOError:
-        print("Path or filename incorrect, quitting...")
-        #quit()
-
-# get the 3rd data set
-if args.file_path3:
-    try:
-        with open(args.file_path3, "r") as filec:
-            for line in itertools.islice(filec, 80):
-                if "+" not in line:
-                    dataset3.append(line)
-    except IOError:
-        print("Path or filename incorrect, quitting...")
-        #quit()
-
-# get the 4th data set
-if args.file_path4:
-    try:
-        with open(args.file_path4, "r") as filed:
-            for line in itertools.islice(filed, 80):
-                if "+" not in line:
-                    dataset4.append(line)
-    except IOError:
-        print("Path or filename incorrect, quitting...")
-        #quit()
+# get the all the data sets
+for idx, path in enumerate(file_paths):
+    if path:
+        try:
+            with open(path, "r") as file:
+                for line in itertools.islice(file, 80):
+                    if "+" not in line:
+                        datasets[idx].append(line)
+        except IOError:
+            print(f"Path or filename ({idx+1}) incorrect, quitting...")
+            if idx == 0: quit()
 
 # combine every 4 items
-dataset1_combined = [''.join([dataset1[i], dataset1[i+1], dataset1[i+2], dataset1[i+3]]).strip() for i in range(0, len(dataset1), 4)]
-dataset2_combined = [''.join([dataset2[i], dataset2[i+1], dataset2[i+2], dataset2[i+3]]).strip() for i in range(0, len(dataset2), 4)]
-dataset3_combined = [''.join([dataset3[i], dataset3[i+1], dataset3[i+2], dataset3[i+3]]).strip() for i in range(0, len(dataset3), 4)]
-dataset4_combined = [''.join([dataset4[i], dataset4[i+1], dataset4[i+2], dataset2[i+3]]).strip() for i in range(0, len(dataset4), 4)]
+combined_datasets = []
+for ds in datasets:
+    if ds:
+        combined = [''.join([ds[i], ds[i+1], ds[i+2], ds[i+3]]).strip() for i in range(0, len(ds), 4)]
+        combined_datasets.append(combined)
+    else:
+        combined_datasets.append([''] * 16)
 
-# elements to array for the table
-dataset1_combined = [[item] for item in dataset1_combined]
-dataset2_combined = [[item] for item in dataset2_combined]
-dataset3_combined = [[item] for item in dataset3_combined]
-dataset4_combined = [[item] for item in dataset4_combined]
+# pad arrays to match the maximum loop length (default 16 elements)
+max_len = max(len(arr) for arr in combined_datasets)
+for i in range(4):
+    if len(combined_datasets[i]) < max_len:
+        combined_datasets[i] += [''] * (max_len - len(combined_datasets[i]))
 
-# check if the datasets are empty
-if not dataset1_combined: dataset1_combined = [[''], [''], [''], [''], [''], [''], [''], [''], [''], [''], [''], [''], [''], [''], [''], ['']]
-if not dataset2_combined: dataset2_combined = [[''], [''], [''], [''], [''], [''], [''], [''], [''], [''], [''], [''], [''], [''], [''], ['']]
-if not dataset3_combined: dataset3_combined = [[''], [''], [''], [''], [''], [''], [''], [''], [''], [''], [''], [''], [''], [''], [''], ['']]
-if not dataset4_combined: dataset4_combined = [[''], [''], [''], [''], [''], [''], [''], [''], [''], [''], [''], [''], [''], [''], [''], ['']]
+def highlight_diff(baseline, target):
+    """Compares baseline and target character-by-character, highlighting differences in Red."""
+    if not target or baseline == target:
+        return target
+    
+    result = []
+    # split blocks by newlines to match line alignments accurately
+    base_lines = baseline.split('\n')
+    target_lines = target.split('\n')
+    
+    # process line pairings side-by-side
+    for b_line, t_line in itertools.zip_longest(base_lines, target_lines, fillvalue=''):
+        line_chars = []
+        # ndiff mofo!
+        diff = difflib.ndiff(b_line, t_line)
+        
+        for change in diff:
+            # '+' indicates character exists in target but not baseline (an addition/change)
+            if change.startswith('+ '):
+                line_chars.append(f"\033[91m{change[2:]}\033[0m")
+            # ' ' indicates character matches perfectly
+            elif change.startswith(' '):
+                line_chars.append(change[2:])
+            # '-' indicates deleted characters from baseline, which we ignore in the target cell
+            elif change.startswith('- '):
+                pass
+                
+        result.append(''.join(line_chars))
+        
+    return '\n'.join(result)
 
-# adding sector, sector block and block number
-for x in range(len(dataset1_combined)):
-    dataset1_combined[x] = [x] + [str(x+x+x+x)+"\n"+str(x+x+x+x+1)+"\n"+str(+x+x+x+x+2)+"\n"+str(x+x+x+x+3)] + ["0\n1\n2\n3"] + dataset1_combined[x] + dataset2_combined[x] + dataset3_combined[x] + dataset4_combined[x]
+# rows constructor
+table_rows = []
+for x, (val1, val2, val3, val4) in enumerate(itertools.zip_longest(*combined_datasets, fillvalue='')):
+    
+    # baseline is treated as a string even if empty
+    val1_str = val1 if val1 else ''
 
-# adding titles in bold
-dataset1_combined.insert(0, ["\033[1mSector", "SB", "Block", "Dataset 1", "Dataset 2", "Dataset 3", "Dataset 4\033[0m"])
+    # character-level difference highlighting
+    fmt_val2 = highlight_diff(val1_str, val2) if args.file_path2 else val2
+    fmt_val3 = highlight_diff(val1_str, val3) if args.file_path3 else val3
+    fmt_val4 = highlight_diff(val1_str, val4) if args.file_path4 else val4
 
-# creating the table
-table = tabulate(dataset1_combined, headers="firstrow", tablefmt="rounded_grid")
+    # build the row metadata layout strings
+    sb_str = f"{x*4}\n{x*4+1}\n{x*4+2}\n{x*4+3}"
+    block_str = "0\n1\n2\n3"
+    
+    table_rows.append([x, sb_str, block_str, val1, fmt_val2, fmt_val3, fmt_val4])
+
+# add bold titles
+table_rows.insert(0, ["\033[1mSector\033[0m", "\033[1mSB\033[0m", "\033[1mBlock\033[0m", "\033[1mDataset 1\033[0m", "\033[1mDataset 2\033[0m", "\033[1mDataset 3\033[0m", "\033[1mDataset 4\033[0m"])
 
 # we are done
+table = tabulate(table_rows, headers="firstrow", tablefmt="rounded_grid")
 print(table)
